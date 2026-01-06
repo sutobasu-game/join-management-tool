@@ -5,19 +5,20 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
+/* ===== 共通（一般：男の子風） ===== */
 body {
   font-family: "M PLUS Rounded 1c", sans-serif;
   background: linear-gradient(#eaf4ff, #ffffff);
   color: #334;
+  margin: 0;
   padding: 12px;
 }
-
-h1,h2 { color:#5b7dbb; }
+h1, h2 { color:#5b7dbb; }
 
 #reader {
   max-width:380px;
   margin:auto;
-  background:#fff;
+  background:white;
   border-radius:20px;
   padding:10px;
   box-shadow:0 8px 20px rgba(120,160,220,.25);
@@ -32,9 +33,15 @@ button {
   cursor:pointer;
 }
 
+input {
+  padding:8px;
+  border-radius:12px;
+  border:1px solid #ccc;
+}
+
 table {
   width:100%;
-  background:#fff;
+  background:white;
   border-radius:16px;
   overflow:hidden;
   box-shadow:0 6px 16px rgba(0,0,0,.12);
@@ -49,6 +56,7 @@ td { background:#f8fbff; text-align:center; padding:6px; }
   cursor:pointer;
 }
 
+/* ===== モーダル ===== */
 .modal {
   position:fixed;
   inset:0;
@@ -59,12 +67,28 @@ td { background:#f8fbff; text-align:center; padding:6px; }
 }
 
 .modal-content {
-  background:#fff;
+  background:white;
   padding:20px;
   border-radius:20px;
   width:90%;
-  max-width:320px;
+  max-width:330px;
 }
+
+/* ===== 管理者：女の子風 ===== */
+.admin-mode body {
+  background: linear-gradient(#ffeaf4, #ffffff);
+}
+.admin-mode h1,
+.admin-mode h2 { color:#c26aa0; }
+.admin-mode #reader {
+  box-shadow:0 8px 20px rgba(240,160,200,.35);
+}
+.admin-mode button {
+  background:linear-gradient(#ffb7d5,#ffe0ee);
+  color:#6a2c4d;
+}
+.admin-mode th { background:#ffd6e8; }
+.admin-mode td { background:#fff6fa; }
 </style>
 </head>
 
@@ -74,6 +98,7 @@ td { background:#f8fbff; text-align:center; padding:6px; }
 
 <div id="reader"></div>
 
+<!-- 読み取り結果 -->
 <div class="modal" id="resultModal">
   <div class="modal-content">
     <h3 id="modeTitle"></h3>
@@ -82,6 +107,21 @@ td { background:#f8fbff; text-align:center; padding:6px; }
   </div>
 </div>
 
+<!-- 管理者説明（最初の1回だけ） -->
+<div class="modal" id="helpModal">
+  <div class="modal-content">
+    <h3>管理者の使い方</h3>
+    <div style="font-size:14px;line-height:1.6;text-align:left">
+      ・あなたは管理者です<br>
+      ・名前登録、履歴削除ができます<br>
+      ・参加者は1日1回のみカウント<br>
+      ・毎年4月1日にリセットされます
+    </div>
+    <button onclick="closeHelp()">理解した</button>
+  </div>
+</div>
+
+<!-- 履歴 -->
 <div class="modal" id="timeModal">
   <div class="modal-content">
     <h3>参加履歴</h3>
@@ -90,11 +130,11 @@ td { background:#f8fbff; text-align:center; padding:6px; }
   </div>
 </div>
 
+<!-- 管理者操作 -->
 <div id="adminArea" style="display:none">
   <h2>管理者操作</h2>
   ID <input id="regId">
-  名前 <input id="regName">
-  <br>
+  名前 <input id="regName"><br>
   <button onclick="register()">名前登録</button>
   <button onclick="deleteHistory()">履歴削除</button>
 </div>
@@ -106,20 +146,31 @@ td { background:#f8fbff; text-align:center; padding:6px; }
 </table>
 
 <script>
-const KEY = "participants";
-const ADMIN_KEY = "adminId";
+const KEY="participants";
+const ADMIN_KEY="adminId";
+const HELP_KEY="adminHelpShown";
 
-let participants = JSON.parse(localStorage.getItem(KEY)||"{}");
-let adminId = localStorage.getItem(ADMIN_KEY);
-let isAdmin = false;
+let participants=JSON.parse(localStorage.getItem(KEY)||"{}");
+let adminId=localStorage.getItem(ADMIN_KEY);
+let isAdmin=false;
 let qr;
 
-/* ---------- 保存 ---------- */
+/* 年度リセット */
+(function(){
+  const d=new Date();
+  if(d.getMonth()==3 && d.getDate()==1 && localStorage.getItem("reset")!=d.getFullYear()){
+    for(const id in participants){
+      participants[id]={...participants[id],count:0,times:[],lastDate:""};
+    }
+    localStorage.setItem("reset",d.getFullYear());
+    localStorage.setItem(KEY,JSON.stringify(participants));
+  }
+})();
+
 function save(){ localStorage.setItem(KEY,JSON.stringify(participants)); render(); }
 
-/* ---------- QR ---------- */
 function startQR(){
-  qr = new Html5Qrcode("reader");
+  qr=new Html5Qrcode("reader");
   qr.start({facingMode:"environment"},{fps:10,qrbox:250},onScan);
 }
 function stopQR(){ if(qr) qr.stop(); }
@@ -127,39 +178,32 @@ function stopQR(){ if(qr) qr.stop(); }
 function onScan(id){
   if(!/^\d+$/.test(id)) return;
 
-  // 管理者未設定なら最初のQRを管理者に
   if(!adminId){
-    adminId = id;
-    localStorage.setItem(ADMIN_KEY, id);
-    isAdmin = true;
-    showResult("管理者登録",
-      `このIDが管理者になりました\nID：${id}`);
+    adminId=id;
+    localStorage.setItem(ADMIN_KEY,id);
+    isAdmin=true;
+    showResult("管理者登録","このIDが管理者です\nID："+id);
+    if(!localStorage.getItem(HELP_KEY)) helpModal.style.display="flex";
     return;
   }
 
-  isAdmin = (id === adminId);
+  isAdmin=(id===adminId);
 
-  const now = new Date();
-  const date = now.toISOString().slice(0,10);
-  const time = date.replace(/-/g,"/")+" "+
-    now.toTimeString().slice(0,8);
+  const now=new Date();
+  const date=now.toISOString().slice(0,10);
+  const time=date.replace(/-/g,"/")+" "+now.toTimeString().slice(0,8);
 
-  if(!participants[id]){
+  if(!participants[id])
     participants[id]={name:"",count:0,times:[],lastDate:""};
-  }
 
-  let msg;
+  let msg="管理者モード";
   if(!isAdmin){
-    if(participants[id].lastDate !== date){
+    if(participants[id].lastDate!==date){
       participants[id].count++;
       participants[id].times.push(time);
-      participants[id].lastDate = date;
+      participants[id].lastDate=date;
       msg="本日の参加を記録しました";
-    } else {
-      msg="今日は参加済みです";
-    }
-  } else {
-    msg="管理者モードです";
+    } else msg="今日は参加済みです";
   }
 
   save();
@@ -167,45 +211,48 @@ function onScan(id){
     `ID：${id}\n名前：${participants[id].name||"未登録"}\n回数：${participants[id].count}\n${msg}`);
 }
 
-/* ---------- モーダル ---------- */
 function showResult(title,text){
   stopQR();
-  modeTitle.innerText = title;
-  resultText.innerText = text;
-  adminArea.style.display = isAdmin ? "block":"none";
+  modeTitle.innerText=title;
+  resultText.innerText=text;
+  document.documentElement.classList.toggle("admin-mode",isAdmin);
+  adminArea.style.display=isAdmin?"block":"none";
   resultModal.style.display="flex";
 }
 function closeResult(){
   resultModal.style.display="none";
+  document.documentElement.classList.remove("admin-mode");
   startQR();
 }
+
+function closeHelp(){
+  localStorage.setItem(HELP_KEY,"yes");
+  helpModal.style.display="none";
+}
+
 function showTimes(id){
-  let p=participants[id];
-  timeList.innerHTML =
-    `<b>ID：</b>${id}<br>`+
-    p.times.map((t,i)=>`${i+1}. ${t}`).join("<br>");
+  const p=participants[id];
+  timeList.innerHTML=p.times.map((t,i)=>`${i+1}. ${t}`).join("<br>");
   timeModal.style.display="flex";
 }
 function closeTime(){ timeModal.style.display="none"; }
 
-/* ---------- 管理者操作 ---------- */
 function register(){
-  if(!isAdmin) return;
-  if(!participants[regId.value]) return;
-  participants[regId.value].name = regName.value;
-  save();
+  if(isAdmin && participants[regId.value]){
+    participants[regId.value].name=regName.value;
+    save();
+  }
 }
 function deleteHistory(){
-  if(!isAdmin) return;
-  if(!participants[regId.value]) return;
-  participants[regId.value].times=[];
-  participants[regId.value].count=0;
-  participants[regId.value].lastDate="";
-  save();
-  alert("履歴を削除しました");
+  if(isAdmin && participants[regId.value]){
+    participants[regId.value].count=0;
+    participants[regId.value].times=[];
+    participants[regId.value].lastDate="";
+    save();
+    alert("履歴を削除しました");
+  }
 }
 
-/* ---------- 表示 ---------- */
 function render(){
   list.innerHTML="";
   for(const id in participants){
