@@ -6,90 +6,64 @@
 
 <style>
 body {
-  font-family: "M PLUS Rounded 1c", "ヒラギノ丸ゴ", sans-serif;
+  font-family: "M PLUS Rounded 1c", sans-serif;
   background: linear-gradient(#eaf4ff, #ffffff);
   color: #334;
-  margin: 0;
   padding: 12px;
 }
 
-h1, h2 {
-  color: #5b7dbb;
-}
+h1,h2 { color:#5b7dbb; }
 
 #reader {
-  max-width: 380px;
-  margin: auto;
-  background: white;
-  border-radius: 20px;
-  padding: 10px;
-  box-shadow: 0 8px 20px rgba(120,160,220,0.25);
+  max-width:380px;
+  margin:auto;
+  background:#fff;
+  border-radius:20px;
+  padding:10px;
+  box-shadow:0 8px 20px rgba(120,160,220,.25);
 }
 
 button {
-  background: linear-gradient(#a9c9ff, #dbe8ff);
-  border: none;
-  border-radius: 999px;
-  padding: 10px 18px;
-  margin-top: 8px;
-  font-size: 15px;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-}
-
-button:hover {
-  transform: translateY(-2px);
-}
-
-input {
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid #ccc;
+  background:linear-gradient(#a9c9ff,#dbe8ff);
+  border:none;
+  border-radius:999px;
+  padding:10px 18px;
+  margin-top:8px;
+  cursor:pointer;
 }
 
 table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+  width:100%;
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 6px 16px rgba(0,0,0,.12);
 }
 
-th {
-  background: #cfe0ff;
-  padding: 6px;
-}
-
-td {
-  background: #f8fbff;
-  padding: 6px;
-  text-align: center;
-}
+th { background:#cfe0ff; }
+td { background:#f8fbff; text-align:center; padding:6px; }
 
 .idlink {
-  color: #4a73c9;
-  text-decoration: underline;
-  cursor: pointer;
+  color:#4a73c9;
+  text-decoration:underline;
+  cursor:pointer;
 }
 
-/* モーダル */
 .modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  display: none;
-  align-items: center;
-  justify-content: center;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
 }
 
 .modal-content {
-  background: white;
-  padding: 20px;
-  width: 90%;
-  max-width: 320px;
-  border-radius: 20px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  background:#fff;
+  padding:20px;
+  border-radius:20px;
+  width:90%;
+  max-width:320px;
 }
 </style>
 </head>
@@ -98,153 +72,145 @@ td {
 
 <h1>参加管理サイト</h1>
 
-<h2>QRコード読み取り</h2>
 <div id="reader"></div>
 
-<!-- 読み取り結果 -->
 <div class="modal" id="resultModal">
   <div class="modal-content">
-    <h3>読み取り結果</h3>
-    <p id="resultText"></p>
-    <button onclick="closeResult()">閉じる（再読み取り）</button>
+    <h3 id="modeTitle"></h3>
+    <pre id="resultText"></pre>
+    <button onclick="closeResult()">閉じる</button>
   </div>
 </div>
 
-<!-- 履歴表示 -->
 <div class="modal" id="timeModal">
   <div class="modal-content">
     <h3>参加履歴</h3>
-    <div id="timeList" style="text-align:left;font-size:14px"></div>
+    <div id="timeList"></div>
     <button onclick="closeTime()">閉じる</button>
   </div>
 </div>
 
-<h2>名前登録</h2>
-ID <input id="regId">
-名前 <input id="regName">
-<br>
-<button onclick="register()">登録</button>
+<div id="adminArea" style="display:none">
+  <h2>管理者操作</h2>
+  ID <input id="regId">
+  名前 <input id="regName">
+  <br>
+  <button onclick="register()">名前登録</button>
+  <button onclick="deleteHistory()">履歴削除</button>
+</div>
 
 <h2>参加一覧</h2>
 <table>
-<thead>
-<tr><th>ID</th><th>名前</th><th>回数</th></tr>
-</thead>
+<thead><tr><th>ID</th><th>名前</th><th>回数</th></tr></thead>
 <tbody id="list"></tbody>
 </table>
 
 <script>
 const KEY = "participants";
-let participants = JSON.parse(localStorage.getItem(KEY) || "{}");
+const ADMIN_KEY = "adminId";
+
+let participants = JSON.parse(localStorage.getItem(KEY)||"{}");
+let adminId = localStorage.getItem(ADMIN_KEY);
+let isAdmin = false;
 let qr;
 
-/* ---------- 年度リセット ---------- */
-function checkReset() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const isApril1 = now.getMonth() === 3 && now.getDate() === 1;
-  const last = localStorage.getItem("lastResetYear");
-
-  if (isApril1 && last != year) {
-    for (const id in participants) {
-      participants[id].count = 0;
-      participants[id].times = [];
-      participants[id].lastDate = "";
-    }
-    localStorage.setItem("lastResetYear", year);
-    save();
-    alert("4月1日：新年度リセットしました");
-  }
-}
-
 /* ---------- 保存 ---------- */
-function save() {
-  localStorage.setItem(KEY, JSON.stringify(participants));
-  render();
-}
+function save(){ localStorage.setItem(KEY,JSON.stringify(participants)); render(); }
 
 /* ---------- QR ---------- */
-function startQR() {
+function startQR(){
   qr = new Html5Qrcode("reader");
-  qr.start({facingMode:"environment"}, {fps:10, qrbox:250}, onScan);
+  qr.start({facingMode:"environment"},{fps:10,qrbox:250},onScan);
 }
+function stopQR(){ if(qr) qr.stop(); }
 
-function stopQR() {
-  if (qr) qr.stop();
-}
+function onScan(id){
+  if(!/^\d+$/.test(id)) return;
 
-function onScan(text) {
-  if (!/^\d+$/.test(text)) return;
+  // 管理者未設定なら最初のQRを管理者に
+  if(!adminId){
+    adminId = id;
+    localStorage.setItem(ADMIN_KEY, id);
+    isAdmin = true;
+    showResult("管理者登録",
+      `このIDが管理者になりました\nID：${id}`);
+    return;
+  }
+
+  isAdmin = (id === adminId);
 
   const now = new Date();
-  const date =
-    now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
-  const time =
-    date.replace(/-/g,"/")+" "+
-    String(now.getHours()).padStart(2,"0")+":"+
-    String(now.getMinutes()).padStart(2,"0")+":"+
-    String(now.getSeconds()).padStart(2,"0");
+  const date = now.toISOString().slice(0,10);
+  const time = date.replace(/-/g,"/")+" "+
+    now.toTimeString().slice(0,8);
 
-  if (!participants[text]) {
-    participants[text] = {name:"", count:0, times:[], lastDate:""};
+  if(!participants[id]){
+    participants[id]={name:"",count:0,times:[],lastDate:""};
   }
 
   let msg;
-  if (participants[text].lastDate !== date) {
-    participants[text].count++;
-    participants[text].times.push(time);
-    participants[text].lastDate = date;
-    msg = "本日の参加を記録しました";
+  if(!isAdmin){
+    if(participants[id].lastDate !== date){
+      participants[id].count++;
+      participants[id].times.push(time);
+      participants[id].lastDate = date;
+      msg="本日の参加を記録しました";
+    } else {
+      msg="今日は参加済みです";
+    }
   } else {
-    msg = "今日はすでに参加済みです";
+    msg="管理者モードです";
   }
 
   save();
-  stopQR();
-
-  resultText.innerText =
-    `ID：${text}
-名前：${participants[text].name || "未登録"}
-参加回数：${participants[text].count}
-${msg}`;
-
-  resultModal.style.display = "flex";
+  showResult(isAdmin?"管理者モード":"参加確認",
+    `ID：${id}\n名前：${participants[id].name||"未登録"}\n回数：${participants[id].count}\n${msg}`);
 }
 
 /* ---------- モーダル ---------- */
-function closeResult() {
-  resultModal.style.display = "none";
+function showResult(title,text){
+  stopQR();
+  modeTitle.innerText = title;
+  resultText.innerText = text;
+  adminArea.style.display = isAdmin ? "block":"none";
+  resultModal.style.display="flex";
+}
+function closeResult(){
+  resultModal.style.display="none";
   startQR();
 }
-
-function showTimes(id) {
-  const p = participants[id];
-  let html = `ID：${id}<br>名前：${p.name || "未登録"}<hr>`;
-  p.times.forEach((t,i)=> html += `${i+1}. ${t}<br>`);
-  timeList.innerHTML = html;
-  timeModal.style.display = "flex";
+function showTimes(id){
+  let p=participants[id];
+  timeList.innerHTML =
+    `<b>ID：</b>${id}<br>`+
+    p.times.map((t,i)=>`${i+1}. ${t}`).join("<br>");
+  timeModal.style.display="flex";
 }
+function closeTime(){ timeModal.style.display="none"; }
 
-function closeTime() {
-  timeModal.style.display = "none";
-}
-
-/* ---------- 登録 ---------- */
-function register() {
-  if (!regId.value) return;
-  if (!participants[regId.value]) {
-    participants[regId.value] = {name:"", count:0, times:[], lastDate:""};
-  }
+/* ---------- 管理者操作 ---------- */
+function register(){
+  if(!isAdmin) return;
+  if(!participants[regId.value]) return;
   participants[regId.value].name = regName.value;
   save();
 }
+function deleteHistory(){
+  if(!isAdmin) return;
+  if(!participants[regId.value]) return;
+  participants[regId.value].times=[];
+  participants[regId.value].count=0;
+  participants[regId.value].lastDate="";
+  save();
+  alert("履歴を削除しました");
+}
 
 /* ---------- 表示 ---------- */
-function render() {
-  list.innerHTML = "";
-  for (const id in participants) {
-    const p = participants[id];
-    list.innerHTML += `
+function render(){
+  list.innerHTML="";
+  for(const id in participants){
+    const p=participants[id];
+    list.innerHTML+=`
       <tr>
         <td class="idlink" onclick="showTimes('${id}')">${id}</td>
         <td>${p.name}</td>
@@ -253,10 +219,8 @@ function render() {
   }
 }
 
-checkReset();
 render();
 startQR();
 </script>
-
 </body>
 </html>
